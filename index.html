@@ -223,11 +223,14 @@
         }
 
         // --- THUẬT TOÁN AI NÂNG CẤP (MINIMAX + ALPHA-BETA PRUNING) ---
+        const MAX_DEPTH = 3; // Độ sâu tìm kiếm nước đi
+        const MAX_CANDIDATES = 12; // Số nước đi tiềm năng nhất được đưa vào tính toán
+
         function getBestMove() {
             let candidates = getCandidateMoves(boardState);
             if (candidates.length === 0) return Math.floor((BOARD_SIZE * BOARD_SIZE) / 2);
 
-            // 1. Kiểm tra nếu Bot thắng ngay lượt này
+            // 1. Kiểm tra thắng ngay lượt này
             for (let idx of candidates) {
                 boardState[idx] = BOT;
                 if (checkWin(boardState, idx, BOT)) {
@@ -237,7 +240,7 @@
                 boardState[idx] = "";
             }
 
-            // 2. Kiểm tra nếu Người chơi sắp thắng lượt tới thì phải chặn ngay
+            // 2. Kiểm tra chặn người chơi thắng ngay lượt tới
             for (let idx of candidates) {
                 boardState[idx] = HUMAN;
                 if (checkWin(boardState, idx, HUMAN)) {
@@ -247,16 +250,16 @@
                 boardState[idx] = "";
             }
 
-            // 3. Sử dụng Minimax với Alpha-Beta Pruning độ sâu 3
+            // 3. Sử dụng Minimax kết hợp Alpha-Beta Pruning
             let bestScore = -Infinity;
             let bestMove = candidates[0];
 
-            // Sắp xếp nước đi ứng viên theo điểm đánh giá sơ bộ để tối ưu cắt tỉa nhánh
             candidates.sort((a, b) => quickEvaluate(b) - quickEvaluate(a));
+            let topCandidates = candidates.slice(0, MAX_CANDIDATES);
 
-            for (let idx of candidates) {
+            for (let idx of topCandidates) {
                 boardState[idx] = BOT;
-                let score = minimax(boardState, 2, false, -Infinity, Infinity, idx);
+                let score = minimax(boardState, MAX_DEPTH, false, -Infinity, Infinity, idx);
                 boardState[idx] = "";
 
                 if (score > bestScore) {
@@ -274,24 +277,26 @@
             boardState[index] = HUMAN;
             let scoreHuman = evaluateBoard(boardState, HUMAN);
             boardState[index] = "";
-            return scoreBot + scoreHuman;
+            return scoreBot + scoreHuman * 1.5;
         }
 
         function minimax(board, depth, isMaximizing, alpha, beta, lastMoveIndex) {
             const lastPlayer = isMaximizing ? HUMAN : BOT;
             if (checkWin(board, lastMoveIndex, lastPlayer)) {
-                return isMaximizing ? -1000000 - depth : 1000000 + depth;
+                return isMaximizing ? -10000000 - depth : 10000000 + depth;
             }
 
             if (depth === 0 || isBoardFull(board)) {
-                return evaluateBoard(board, BOT) - evaluateBoard(board, HUMAN) * 1.15;
+                return evaluateBoard(board, BOT) - evaluateBoard(board, HUMAN) * 1.2;
             }
 
             let candidates = getCandidateMoves(board);
+            candidates.sort((a, b) => quickEvaluate(b) - quickEvaluate(a));
+            let topCandidates = candidates.slice(0, MAX_CANDIDATES);
 
             if (isMaximizing) {
                 let maxEval = -Infinity;
-                for (let idx of candidates) {
+                for (let idx of topCandidates) {
                     board[idx] = BOT;
                     let evalVal = minimax(board, depth - 1, false, alpha, beta, idx);
                     board[idx] = "";
@@ -302,7 +307,7 @@
                 return maxEval;
             } else {
                 let minEval = Infinity;
-                for (let idx of candidates) {
+                for (let idx of topCandidates) {
                     board[idx] = HUMAN;
                     let evalVal = minimax(board, depth - 1, true, alpha, beta, idx);
                     board[idx] = "";
@@ -324,8 +329,8 @@
                     let row = Math.floor(i / BOARD_SIZE);
                     let col = i % BOARD_SIZE;
 
-                    for (let dr = -2; dr <= 2; dr++) {
-                        for (let dc = -2; dc <= 2; dc++) {
+                    for (let dr = -1; dr <= 1; dr++) {
+                        for (let dc = -1; dc <= 1; dc++) {
                             if (dr === 0 && dc === 0) continue;
                             let r = row + dr;
                             let c = col + dc;
@@ -342,7 +347,6 @@
             return Array.from(candidates);
         }
 
-        // Đánh giá điểm bàn cờ theo các thế trận
         function evaluateBoard(board, player) {
             let totalScore = 0;
             const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
@@ -360,7 +364,6 @@
         }
 
         function countPatternScore(r, c, dr, dc, player, board) {
-            // Tránh đếm lặp chuỗi
             let pr = r - dr;
             let pc = c - dc;
             if (pr >= 0 && pr < BOARD_SIZE && pc >= 0 && pc < BOARD_SIZE) {
@@ -378,27 +381,25 @@
             }
 
             let openEnds = 0;
-            // Kiểm tra đầu sau
             if (currR >= 0 && currR < BOARD_SIZE && currC >= 0 && currC < BOARD_SIZE && board[currR * BOARD_SIZE + currC] === "") {
                 openEnds++;
             }
-            // Kiểm tra đầu trước
             if (pr >= 0 && pr < BOARD_SIZE && pc >= 0 && pc < BOARD_SIZE && board[pr * BOARD_SIZE + pc] === "") {
                 openEnds++;
             }
 
-            if (count >= 5) return 1000000;
+            if (count >= 5) return 10000000;
             if (count === 4) {
-                if (openEnds === 2) return 50000;
-                if (openEnds === 1) return 10000;
+                if (openEnds === 2) return 2000000;
+                if (openEnds === 1) return 50000;
             }
             if (count === 3) {
-                if (openEnds === 2) return 4000;
-                if (openEnds === 1) return 500;
+                if (openEnds === 2) return 100000;
+                if (openEnds === 1) return 5000;
             }
             if (count === 2) {
-                if (openEnds === 2) return 200;
-                if (openEnds === 1) return 50;
+                if (openEnds === 2) return 1000;
+                if (openEnds === 1) return 100;
             }
             if (count === 1 && openEnds === 2) return 10;
 
