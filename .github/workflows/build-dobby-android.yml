@@ -40,6 +40,21 @@ jobs:
         working-directory: dobby
         run: sh scripts/setup_linux_cross_compile.sh
 
+      # Lỗi upstream (jmpews/Dobby issue #253): file asm arm64 dùng cú pháp Mach-O
+      # (@PAGE/@PAGEOFF) nên không build được trên Android. Đổi sang cú pháp ELF.
+      - name: Patch arm64 asm for Android (ELF syntax)
+        working-directory: dobby
+        run: |
+          D=source/TrampolineBridge/ClosureTrampolineBridge/arm64
+          for f in "$D"/*.asm; do
+            sed -i -E 's/([A-Za-z_][A-Za-z0-9_]*)@PAGEOFF/:lo12:\1/g; s/([A-Za-z_][A-Za-z0-9_]*)@PAGE\b/\1/g' "$f"
+          done
+          grep -n 'adrp\|lo12' "$D"/*.asm || true
+          if grep -rn '@PAGE' "$D"; then
+            echo "Vẫn còn cú pháp Mach-O trong asm" >&2
+            exit 1
+          fi
+
       - name: Build
         working-directory: dobby
         run: |
