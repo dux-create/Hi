@@ -12,18 +12,20 @@ on:
 permissions:
   contents: read
 
+# Phiên bản toolchain giống workflow upstream của Dobby
 env:
-  API_LEVEL: "21"
+  CMAKE_VERSION: 3.25.2
+  LLVM_VERSION: 15.0.6
+  NDK_VERSION: r25b
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         abi: [armeabi-v7a, arm64-v8a] # arm, arm64
-        lib: [shared, static]
 
     steps:
       - name: Checkout Dobby
@@ -34,33 +36,30 @@ jobs:
           path: dobby
           submodules: recursive
 
-      - name: Configure (Android NDK toolchain)
-        run: |
-          NDK="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
-          echo "Using NDK: $NDK"
-          cmake -S dobby -B build \
-            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
-            -DANDROID_ABI=${{ matrix.abi }} \
-            -DANDROID_PLATFORM=android-$API_LEVEL \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-            -DDOBBY_GENERATE_SHARED=${{ matrix.lib == 'shared' && 'ON' || 'OFF' }} \
-            -DDOBBY_DEBUG=OFF
-          # Các option khác: -DPlugin.SymbolResolver=ON -DPlugin.Android.BionicLinkerUtil=ON
+      - name: Setup toolchains (cmake, llvm, ndk)
+        working-directory: dobby
+        run: sh scripts/setup_linux_cross_compile.sh
 
       - name: Build
-        run: cmake --build build -j "$(nproc)"
+        working-directory: dobby
+        run: |
+          python3 scripts/platform_builder.py \
+            --platform=android \
+            --arch=${{ matrix.abi }} \
+            --cmake_dir=$HOME/opt/cmake-$CMAKE_VERSION \
+            --llvm_dir=$HOME/opt/llvm-$LLVM_VERSION \
+            --android_ndk_dir=$HOME/opt/ndk-$NDK_VERSION
 
       - name: Collect output
         run: |
-          mkdir -p out/include out/lib/${{ matrix.abi }}
+          mkdir -p out/include out/lib
           cp dobby/include/dobby.h out/include/
-          find build -type f -name 'libdobby.*' -exec cp -v {} out/lib/${{ matrix.abi }}/ \;
-          ls -l out/lib/${{ matrix.abi }}/libdobby.*
+          cp -r dobby/build/android/${{ matrix.abi }} out/lib/
+          ls -lR out
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: dobby-android-${{ matrix.abi }}-${{ matrix.lib }}
+          name: dobby-android-${{ matrix.abi }}
           path: out
           if-no-files-found: error
