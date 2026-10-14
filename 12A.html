@@ -90,7 +90,7 @@
     display: flex; flex-direction: column; min-width: 0;
     background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
     scroll-margin-top: 24px;
-    transition: transform 0.35s cubic-bezier(.2,.8,.2,1), border-color 0.35s;
+    transition: transform 0.35s cubic-bezier(.2,.8,.2,1), border-color 0.35s, filter 0.4s;
   }
   .card:hover { transform: translateY(-6px); border-color: var(--m-fg); }
 
@@ -173,6 +173,10 @@
     .card { animation: slide-l linear backwards; animation-timeline: view(); animation-range: entry 0% entry 60%; animation-delay: 0s; }
     .tags li { animation: none; }
   }
+
+  /* Chế độ giới thiệu: chỉ thẻ đang giới thiệu rõ nét, các thẻ khác tối + nhòe */
+  html.tour .card:not(.active) { filter: blur(8px) brightness(0.35) saturate(0.4); pointer-events: none; }
+  html.tour .wrap { padding-bottom: 70svh; } /* để thẻ cuối cũng cuộn lên đầu được */
 
   @media (max-width: 760px) {
     .grid { grid-template-columns: minmax(0, 1fr); }
@@ -300,7 +304,11 @@
   var cancelled = false, raf = 0;
   var root = document.documentElement;
 
-  function cancel() { cancelled = true; cancelAnimationFrame(raf); root.style.scrollBehavior = ''; }
+  function endTour() {
+    root.classList.remove('tour');
+    document.querySelectorAll('.card.active').forEach(function (c) { c.classList.remove('active'); });
+  }
+  function cancel() { cancelled = true; cancelAnimationFrame(raf); root.style.scrollBehavior = ''; endTour(); }
   ['wheel', 'touchmove'].forEach(function (ev) {
     addEventListener(ev, cancel, { passive: true, once: true });
   });
@@ -311,25 +319,41 @@
   bar.style.cssText = 'position:fixed;top:0;bottom:0;left:0;width:45vw;z-index:90;pointer-events:none;opacity:0;' +
     'background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--accent) 55%,transparent),transparent)';
   document.body.appendChild(bar);
-  function swipe(card) {
+  function swipe(group) {
     var r = (n++ % 2 === 0);
     if (bar.animate) bar.animate([
       { transform: 'translateX(' + (r ? '-60vw' : '110vw') + ') skewX(-14deg)', opacity: 0 },
       { opacity: 1, offset: 0.4 },
       { transform: 'translateX(' + (r ? '110vw' : '-60vw') + ') skewX(-14deg)', opacity: 0 }
     ], { duration: DUR + 250, easing: 'cubic-bezier(.5,0,.3,1)' });
-    if (card.animate) card.animate([
-      { translate: (r ? '-70px' : '70px') + ' 0', opacity: 0.25 },
-      { translate: '0 0', opacity: 1 }
-    ], { duration: DUR + 350, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    group.forEach(function (card, k) {
+      if (!card.animate) return;
+      var from = group.length > 1 ? (k === 0 ? '-70px' : '70px') : (r ? '-70px' : '70px');
+      card.animate([
+        { translate: from + ' 0', opacity: 0.25 },
+        { translate: '0 0', opacity: 1 }
+      ], { duration: DUR + 350, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    });
   }
 
-  function jumpTo(card, done) {
+  /* Gom thẻ theo hàng: máy tính (2 cột) -> 2 thẻ/nhóm, điện thoại (1 cột) -> 1 thẻ/nhóm */
+  function groupByRow(cards) {
+    var groups = [];
+    cards.forEach(function (c) {
+      var last = groups[groups.length - 1];
+      if (last && Math.abs(last[0].offsetTop - c.offsetTop) < 8) last.push(c);
+      else groups.push([c]);
+    });
+    return groups;
+  }
+
+  function jumpTo(group, done) {
+    var card = group[0];
     var y0 = window.scrollY;
     var max = root.scrollHeight - innerHeight;
     var y1 = Math.min(max, Math.max(0, card.getBoundingClientRect().top + y0 - 24));
-    if (Math.abs(y1 - y0) < 10) { done(false); return; }
-    swipe(card);
+    swipe(group);
+    if (Math.abs(y1 - y0) < 10) { done(); return; }
     root.style.scrollBehavior = 'auto';
     var start = performance.now();
     (function step(now) {
@@ -344,20 +368,24 @@
           root.style.scrollBehavior = 'smooth';
           card.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-        done(true);
+        done();
       }
     })(start);
   }
 
-  function run(i, cards) {
-    if (cancelled || i >= cards.length) return;
-    jumpTo(cards[i], function (moved) {
-      setTimeout(function () { run(i + 1, cards); }, moved ? DWELL : 0);
+  function run(i, groups, cards) {
+    if (cancelled) return;
+    if (i >= groups.length) { setTimeout(endTour, DWELL); return; }
+    root.classList.add('tour');
+    cards.forEach(function (c) { c.classList.toggle('active', groups[i].indexOf(c) !== -1); });
+    jumpTo(groups[i], function () {
+      setTimeout(function () { run(i + 1, groups, cards); }, DWELL);
     });
   }
 
   setTimeout(function () {
-    run(0, Array.prototype.slice.call(document.querySelectorAll('.card')));
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+    run(0, groupByRow(cards), cards);
   }, INTRO + WAIT);
 })();
 </script>
