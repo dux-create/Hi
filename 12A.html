@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
-<title>Nhóm ABCD</title>
+<title>Nhóm 4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Be+Vietnam+Pro:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
@@ -59,7 +59,7 @@
   .jump { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
   .jump-label { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
   .chip {
-    display: grid; place-items: center; width: 48px; height: 48px;
+    display: grid; place-items: center; min-width: 48px; height: 48px; padding-inline: 12px; box-sizing: border-box;
     font-family: var(--font-display); font-weight: 800; font-size: 1.4rem;
     text-decoration: none; color: var(--m-fg); background: var(--m-bg);
     border-radius: 4px; transition: transform 0.25s cubic-bezier(.2,.8,.2,1);
@@ -114,6 +114,7 @@
     font-family: var(--font-display); font-weight: 800; font-size: 9.5rem; line-height: 1; letter-spacing: -0.04em;
     transition: transform 0.5s cubic-bezier(.2,.9,.2,1.2); pointer-events: none;
   }
+  .letter.name { font-size: clamp(4rem, 12vw, 6.5rem); letter-spacing: -0.02em; white-space: nowrap; }
   .card:hover .letter { transform: translateX(10px) scale(1.06) rotate(-2deg); }
 
   .body { display: flex; flex-direction: column; gap: 14px; padding: 22px 22px 24px; min-width: 0; }
@@ -258,7 +259,7 @@
 <canvas id="matrix" aria-hidden="true"></canvas>
 
 <div class="intro" aria-hidden="true">
-  <div class="intro-name">NHÓM <span class="ch m-a">A</span><span class="ch m-b">B</span><span class="ch m-c">C</span><span class="ch m-d">D</span></div>
+  <div class="intro-name">NHÓM <span class="ch m-a">4</div>
   <div class="intro-sub">Chào mừng bạn đến với nhóm</div>
   <div class="plane">
     <div class="plane-trail"></div>
@@ -300,17 +301,17 @@
 /* Tạo 14 thẻ thành viên (A–N) */
 (function () {
   var M = [
-    ['Trưởng nhóm', ['Quản lý dự án', 'Lập kế hoạch', 'Thuyết trình']],
-    ['Thiết kế', ['UI/UX', 'Figma', 'Nhận diện thương hiệu']],
-    ['Lập trình', ['JavaScript', 'Python', 'Cơ sở dữ liệu']],
-    ['Nội dung', ['Viết nội dung', 'Dựng video', 'Mạng xã hội']],
+    ['Trưởng nhóm', ['Quản lý dự án', 'Lập kế hoạch', 'Thuyết trình'], 'Trần Trung Hiếu'],
+    ['Thiết kế', ['UI/UX', 'Figma', 'Nhận diện thương hiệu'], 'Lê Đức Dương'],
+    ['Lập trình', ['JavaScript', 'Python', 'Cơ sở dữ liệu'], 'Phạm Công Hoàng'],
+    ['Nội dung', ['Viết nội dung', 'Dựng video', 'Mạng xã hội'], 'Ngô Duy Thành'],
     ['', []], ['', []], ['', []], ['', []], ['', []],
     ['', []], ['', []], ['', []], ['', []], ['', []]
   ];
   var C = ['a', 'b', 'c', 'd'], grid = document.getElementById('grid'), jump = document.getElementById('jump');
   M.forEach(function (m, i) {
     var H = [350, 48, 72, 100, 185, 205, 255, 315, 335, 130];
-    var L = String.fromCharCode(65 + i), id = L.toLowerCase(), k = i < 4 ? 'm-' + C[i] : 'mx';
+    var L = String.fromCharCode(65 + i), S = m[2] ? m[2].split(' ').pop() : L, id = L.toLowerCase(), k = i < 4 ? 'm-' + C[i] : 'mx';
     var h = Math.round((220 + i * 360 / 14) % 360);
     function paint(el) {
       el.style.setProperty('--m-bg', 'light-dark(hsl(' + h + ' 80% 88%), hsl(' + h + ' 55% 22%))');
@@ -320,15 +321,15 @@
     var a = document.createElement('a');
     a.className = 'chip ' + k; a.href = '#' + id; a.style.setProperty('--i', i);
     if (i >= 4) a.style.setProperty('--h', H[i - 4]);
-    a.setAttribute('aria-label', 'Thành viên ' + L); a.textContent = L;
+    a.setAttribute('aria-label', 'Thành viên ' + L); a.textContent = S; if (m[2]) a.style.fontSize = '1.05rem';
     paint(a); jump.appendChild(a);
     var art = document.createElement('article');
     art.className = 'card ' + k; art.id = id; art.style.setProperty('--i', i);
     if (i >= 4) art.style.setProperty('--h', H[i - 4]);
     art.innerHTML =
       '<div class="badge"><span class="badge-role">' + m[0] + '</span><span class="badge-since">Từ 13/10/2026</span>' +
-      '<span class="letter" aria-hidden="true">' + L + '</span></div>' +
-      '<div class="body"><h2>Thành viên ' + L + '</h2>' +
+      '<span class="letter' + (m[2] ? ' name' : '') + '" aria-hidden="true">' + S + '</span></div>' +
+      '<div class="body"><h2>' + (m[2] || 'Thành viên ' + L) + '</h2>' +
       (m[1].length ? '<ul class="tags">' + m[1].map(function (t, j) { return '<li style="--i:' + i + ';--j:' + j + '">' + t + '</li>'; }).join('') + '</ul>' : '') +
       '</div>';
     paint(art); grid.appendChild(art);
@@ -509,21 +510,57 @@ window.TERM_INFO = [
 window.TERM_PAGES = [
   { file: 'gioi-thieu.md', lines: [
     { t: '# Giới thiệu nhóm', cls: 'ok' },
-    { t: '' },
-    { t: 'Nhóm 4 gồm 14 thành viên (A → N).' },
-    { t: 'Thêm nội dung giới thiệu của bạn vào đây...', cls: 'dim' }
+    { t: 'xin chào thầy cô và các bạn !' },
+    { t: 'Nhóm 4 gồm 14 thành viên ' },
+    { t: 'Trần Trung Hiếu' },
+    { t: 'Lê Đức Dương' },
+    { t: 'Phạm Công Hoàng' },
+    { t: 'Ngô Duy Thành' },
+    { t: '.... ' }
   ] },
-  { file: 'ke-hoach.md', lines: [
-    { t: '# Kế hoạch', cls: 'ok' },
+  { file: 'Ques.md', lines: [
+    { t: '# câu hỏi', cls: 'ok' },
     { t: '' },
-    { t: '1. Việc thứ nhất' },
-    { t: '2. Việc thứ hai' },
-    { t: '3. Việc thứ ba' }
+    { t: 'Câu 1: Khả năng thích ứng với sự thay đổi được thể hiện qua thái độ và hành động cụ thể nào?' },
+    { t: 'Câu 2: Học sinh lớp 12 sắp bước vào môi trường mới (trường đại học, học nghề, môi trường sống độc lập) thì sẽ đối mặt với sự thay đổi nào?' },
+    { t: 'Câu 3: Kế hoạch hành động: Cần chuẩn bị những gì (thời gian, kết nối mối quan hệ, tài chính, chăm sóc sức khỏe, tinh thần, quản lí thời gian,kết nối xã hội) để không rơi vào khủng hoảng khi bước ra khỏi vùng an toàn ?' }
   ] },
   { file: 'ket-qua.md', lines: [
     { t: '# Kết quả', cls: 'ok' },
     { t: '' },
-    { t: 'Thêm kết quả của nhóm vào đây...', cls: 'dim' }
+    { t: '## Câu 1: Thái độ và hành động thể hiện khả năng thích ứng' },
+    { t: '' },
+    { t: 'Thái độ:' },
+    { t: '- Chấp nhận thay đổi là điều tất yếu, không né tránh hay phủ nhận.' },
+    { t: '- Giữ tinh thần cởi mở, tích cực, xem thay đổi là cơ hội để trưởng thành.' },
+    { t: '- Bình tĩnh, kiểm soát cảm xúc khi gặp khó khăn hoặc áp lực.' },
+    { t: '' },
+    { t: 'Hành động:' },
+    { t: '- Chủ động tìm hiểu môi trường mới, học hỏi kỹ năng mới.' },
+    { t: '- Linh hoạt điều chỉnh cách làm, thói quen khi hoàn cảnh thay đổi.' },
+    { t: '- Biết nhờ giúp đỡ, tìm kiếm sự hỗ trợ từ thầy cô, bạn bè, gia đình.' },
+    { t: '- Rút kinh nghiệm từ thất bại và kiên trì thử lại.' },
+    { t: '' },
+    { t: '## Câu 2: Những thay đổi học sinh lớp 12 sẽ đối mặt' },
+    { t: '' },
+    { t: '- Học tập: từ học theo chương trình, thầy cô nhắc nhở sang tự học, tự nghiên cứu, khối lượng kiến thức lớn hơn.' },
+    { t: '- Cuộc sống: xa gia đình, tự lo ăn ở, sinh hoạt, chi tiêu.' },
+    { t: '- Các mối quan hệ: xa bạn bè cũ, làm quen bạn mới, thầy cô và môi trường mới.' },
+    { t: '- Tài chính: phải tự quản lý tiền bạc, học phí, sinh hoạt phí.' },
+    { t: '- Tâm lý: áp lực, cô đơn, nhớ nhà, lo lắng về tương lai và nghề nghiệp.' },
+    { t: '- Trách nhiệm: phải tự chịu trách nhiệm về quyết định của bản thân.' },
+    { t: '' },
+    { t: '## Câu 3: Kế hoạch hành động để không rơi vào khủng hoảng' },
+    { t: '' },
+    { t: '- Quản lý thời gian: lập thời gian biểu, ưu tiên việc quan trọng, cân bằng học tập, nghỉ ngơi và giải trí.' },
+    { t: '- Kết nối mối quan hệ: giữ liên lạc với gia đình, bạn cũ; chủ động làm quen bạn mới, tham gia câu lạc bộ, nhóm học tập.' },
+    { t: '- Tài chính: lập ngân sách hàng tháng, chi tiêu hợp lý, tiết kiệm, tìm hiểu học bổng hoặc việc làm thêm.' },
+    { t: '- Chăm sóc sức khỏe: ăn uống đủ chất, ngủ đủ giấc, tập thể dục đều đặn.' },
+    { t: '- Tinh thần: cân bằng cảm xúc, chia sẻ khi áp lực, giữ suy nghĩ tích cực, tìm đến người tin cậy hoặc chuyên gia khi cần.' },
+    { t: '- Kết nối xã hội: tham gia hoạt động tình nguyện, ngoại khóa để mở rộng quan hệ và rèn kỹ năng mềm.' },
+    { t: '- Kỹ năng sống: tự nấu ăn, giặt giũ, giải quyết vấn đề, đưa ra quyết định độc lập.' },
+    { t: '' },
+    { t: 'Kết luận: Thích ứng không phải là không sợ thay đổi, mà là chuẩn bị tốt, giữ tinh thần linh hoạt và dám bước ra khỏi vùng an toàn để trưởng thành.' }
   ] }
 ];
 
