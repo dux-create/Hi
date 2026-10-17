@@ -108,7 +108,7 @@ vec3 spaceColor(vec2 p,float rpx){
   float cr=cos(rl),sr=sin(rl);
   vec3 plane=p.x*(right*cr+up*sr)+p.y*(up*cr-right*sr);
   vec3 rd=normalize(fwd+plane*pxToTan),col;
-  if(rpx>7.5*rr){
+  if(rpx>1e6*rr){
     float b=rpx/rr*2.6;
     col=starfield(normalize(rd-normalize(plane)*(2.0/b)));
   }else{
@@ -116,25 +116,25 @@ vec3 spaceColor(vec2 p,float rpx){
     vec3 ax=jetAxis(uTime);
     float h2=dot(cross(pos,vel),cross(pos,vel)),trans=1.0;
     bool cap=false;
-    for(int i=0;i<300;i++){
+    for(int i=0;i<450;i++){
       float r2=dot(pos,pos),r=sqrt(r2);
       if(r<1.0){cap=true;break;}
-      if(r>45.0&&dot(pos,vel)>0.0)break;
+      if(r>70.0&&dot(pos,vel)>0.0)break;
       float dt=clamp(0.06*r,0.025,0.8);
       float rho0=length(pos-ax*dot(pos,ax));
-      if(rho0<2.5&&r<34.0)dt=min(dt,0.07+0.1*rho0);
+      if(rho0<4.0&&r<70.0)dt=min(dt,0.07+0.1*rho0);
       vel=normalize(vel+(-1.5*h2*pos/(r2*r2*r))*dt);
       vec3 prev=pos;pos+=vel*dt;
       // tia phun thẳng đứng màu xanh, xoắn ốc quay cực nhanh
       float al=dot(pos,ax),jy=abs(al),rho2=max(dot(pos,pos)-al*al,0.0);
-      if(rho2<9.0&&jy>1.2&&jy<18.0){
+      if(rho2<25.0&&jy>1.2&&jy<46.0){
         float w2=pow(0.22+0.045*jy,2.0);
         float core=exp(-rho2/(0.12*w2));
         float dn=exp(-rho2/w2)+0.12*exp(-rho2/(9.0*w2));
         
         
         
-        float env=smoothstep(1.2,2.6,jy)*(1.0-smoothstep(9.0,18.0,jy))*exp(-jy/10.0);
+        float env=smoothstep(1.2,2.6,jy)*(1.0-smoothstep(36.0,46.0,jy))*exp(-jy/40.0);
         float g=(dn*1.1+core*1.5)*env*dt*5.5;
         acc+=trans*mix(vec3(0.12,0.38,1.0),vec3(0.7,0.9,1.0),clamp(core*1.4,0.0,1.0))*g;
       }
