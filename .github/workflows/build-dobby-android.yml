@@ -43,6 +43,15 @@ jobs:
       - name: Install build tools
         run: sudo apt-get update && sudo apt-get install -y ninja-build cmake
 
+      - name: Patch arm64 asm (Mach-O @PAGE syntax -> ELF GOT syntax)
+        run: |
+          f=source/TrampolineBridge/ClosureTrampolineBridge/arm64/closure_bridge_arm64.asm
+          sed -E -i \
+            -e 's|adrp[[:space:]]+x17,[[:space:]]*common_closure_bridge_handler@PAGE$|adrp x17, :got:common_closure_bridge_handler|' \
+            -e 's|add[[:space:]]+x17,[[:space:]]*x17,[[:space:]]*common_closure_bridge_handler@PAGEOFF$|ldr x17, [x17, :got_lo12:common_closure_bridge_handler]|' \
+            "$f"
+          grep -n "common_closure_bridge_handler" "$f"
+
       - name: Configure
         run: |
           cmake -S . -B build-${{ matrix.name }} -G Ninja \
