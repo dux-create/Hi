@@ -71,11 +71,11 @@ vec3 heatColor(float t){
 vec4 diskAt(vec3 hit,vec3 vel,float t){
   float rr=length(hit.xz),rin=2.3,rout=9.8;
   if(rr<rin||rr>rout)return vec4(0.0);
-  float a=atan(hit.z,hit.x)-13.0/(rr*sqrt(rr))*t+0.9*log(rr);
+  float a=atan(hit.z,hit.x)-17.0/(rr*sqrt(rr))*t+0.9*log(rr);
   float n1=fbm3(vec3(rr*3.0,cos(a)*2.3,sin(a)*2.3));
   float n2=noise3(vec3(rr*11.0,cos(a)*6.0,sin(a)*6.0)+vec3(0.0,0.0,t*0.2));
   float n3=noise3(vec3(rr*20.0,cos(a)*10.0,sin(a)*10.0)-vec3(0.0,0.0,t*0.6));
-  float dens=smoothstep(rin,rin+0.45,rr)*(1.0-smoothstep(rout-3.5,rout,rr))*(0.2+1.5*n1*(0.4+0.7*n2+0.6*n3));
+  float dens=smoothstep(rin,rin+0.45,rr)*(1.0-smoothstep(rout-3.5,rout,rr))*(0.08+1.9*smoothstep(0.25,0.75,n1)*(0.3+0.8*n2+0.7*n3));
   float temp=pow(rin/rr,0.8)*1.05;
   vec3 vdir=vec3(-hit.z,0.0,hit.x)/rr;
   float beta=min(0.62,0.72/sqrt(rr));
@@ -83,11 +83,29 @@ vec4 diskAt(vec3 hit,vec3 vel,float t){
   vec3 col=heatColor(temp*dop)*(0.35+1.8*pow(temp,1.6))*clamp(pow(dop,3.0),0.15,5.0);
   return vec4(col,clamp(dens*0.85,0.0,0.96));
 }
+vec3 camDir(float t){
+  float el=0.58+0.45*sin(t*0.5)+0.1*sin(t*1.3+1.0);
+  float az=0.4*t;
+  return vec3(sin(az)*cos(el),sin(el),-cos(az)*cos(el));
+}
+vec3 hashDir(float k,vec3 cd){
+  float u=hash31(vec3(k,1.7,3.1)),v=hash31(vec3(k,5.3,9.2)),w=hash31(vec3(k,2.9,7.7));
+  if(w<0.35)return normalize(cd+(vec3(u,v,u)-0.5)*0.3); // hướng về phía người xem
+  float z=2.0*v-1.0,ph=6.2831*u,s=sqrt(1.0-z*z);
+  return vec3(s*cos(ph),z,s*sin(ph));
+}
+vec3 jetAxis(float t){
+  float seg=t/0.5,k=floor(seg);
+  float f=smoothstep(0.0,0.3,fract(seg));
+  vec3 cd=camDir(t);
+  return normalize(mix(hashDir(k-1.0,cd),hashDir(k,cd),f)+vec3(1e-4));
+}
 vec3 spaceColor(vec2 p,float rpx){
   float rr=max(uR,1.0),pxToTan=0.13/rr;
-  vec3 cam=vec3(0.0,sin(CAM_EL)*CAM_D,-cos(CAM_EL)*CAM_D);
+  vec3 cam=camDir(uTime)*CAM_D;
   vec3 fwd=normalize(-cam),right=normalize(cross(vec3(0,1,0),fwd)),up=cross(fwd,right);
-  float cr=cos(CAM_ROLL),sr=sin(CAM_ROLL);
+  float rl=-0.28+0.3*sin(uTime*0.37);
+  float cr=cos(rl),sr=sin(rl);
   vec3 plane=p.x*(right*cr+up*sr)+p.y*(up*cr-right*sr);
   vec3 rd=normalize(fwd+plane*pxToTan),col;
   if(rpx>7.5*rr){
@@ -95,6 +113,7 @@ vec3 spaceColor(vec2 p,float rpx){
     col=starfield(normalize(rd-normalize(plane)*(2.0/b)));
   }else{
     vec3 pos=cam,vel=rd,acc=vec3(0.0);
+    vec3 ax=jetAxis(uTime);
     float h2=dot(cross(pos,vel),cross(pos,vel)),trans=1.0;
     bool cap=false;
     for(int i=0;i<300;i++){
@@ -102,21 +121,21 @@ vec3 spaceColor(vec2 p,float rpx){
       if(r<1.0){cap=true;break;}
       if(r>45.0&&dot(pos,vel)>0.0)break;
       float dt=clamp(0.06*r,0.025,0.8);
-      float rho0=length(pos.xz);
+      float rho0=length(pos-ax*dot(pos,ax));
       if(rho0<2.5&&r<34.0)dt=min(dt,0.07+0.1*rho0);
       vel=normalize(vel+(-1.5*h2*pos/(r2*r2*r))*dt);
       vec3 prev=pos;pos+=vel*dt;
       // tia phun thẳng đứng màu xanh, xoắn ốc quay cực nhanh
-      float jy=abs(pos.y),rho2=dot(pos.xz,pos.xz);
+      float al=dot(pos,ax),jy=abs(al),rho2=max(dot(pos,pos)-al*al,0.0);
       if(rho2<9.0&&jy>1.2&&jy<18.0){
         float w2=pow(0.22+0.045*jy,2.0);
         float core=exp(-rho2/(0.12*w2));
         float dn=exp(-rho2/w2)+0.12*exp(-rho2/(9.0*w2));
-        float ja=atan(pos.z,pos.x);
-        float st=0.55+0.45*sin(ja*2.0+jy*0.9-uTime*26.0);
-        float nn=noise3(vec3(cos(ja-uTime*9.0)*1.6,sin(ja-uTime*9.0)*1.6,jy*0.8-uTime*14.0));
+        
+        
+        
         float env=smoothstep(1.2,2.6,jy)*(1.0-smoothstep(9.0,18.0,jy))*exp(-jy/10.0);
-        float g=(dn*(0.35+0.65*st)*(0.4+1.2*nn)+core*1.5)*env*dt*5.5;
+        float g=(dn*1.1+core*1.5)*env*dt*5.5;
         acc+=trans*mix(vec3(0.12,0.38,1.0),vec3(0.7,0.9,1.0),clamp(core*1.4,0.0,1.0))*g;
       }
       if(prev.y*pos.y<0.0){
