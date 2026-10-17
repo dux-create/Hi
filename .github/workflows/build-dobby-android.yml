@@ -1,80 +1,98 @@
-name: Build Dobby for Android (arm, arm64)
+name: Build Dobby Android
 
 on:
   workflow_dispatch:
     inputs:
       dobby_ref:
-        description: Dobby branch, tag or commit
-        default: master
+        description: "Dobby branch/tag/commit"
+        default: "master"
   push:
-    branches: [main, master]
+    tags:
+      - "v*"
 
-permissions:
-  contents: read
-
-# Phiên bản toolchain giống workflow upstream của Dobby
 env:
-  CMAKE_VERSION: 3.25.2
-  LLVM_VERSION: 15.0.6
-  NDK_VERSION: r25b
+  ANDROID_API: 21
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        abi: [armeabi-v7a, arm64-v8a] # arm, arm64
+        include:
+          - abi: armeabi-v7a
+            name: arm
+          - abi: arm64-v8a
+            name: arm64
 
     steps:
       - name: Checkout Dobby
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           repository: jmpews/Dobby
-          ref: ${{ inputs.dobby_ref || 'master' }}
-          path: dobby
+          ref: ${{ github.event.inputs.dobby_ref || 'master' }}
           submodules: recursive
 
-      - name: Setup toolchains (cmake, llvm, ndk)
-        working-directory: dobby
-        run: sh scripts/setup_linux_cross_compile.sh
+      - name: Setup NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+          add-to-path: false
 
-      # Lỗi upstream (jmpews/Dobby issue #253): file asm arm64 dùng cú pháp Mach-O
-      # (@PAGE/@PAGEOFF) nên không build được trên Android. Đổi sang cú pháp ELF.
-      - name: Patch arm64 asm for Android (ELF syntax)
-        working-directory: dobby
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build cmake
+
+      - name: Configure
         run: |
-          D=source/TrampolineBridge/ClosureTrampolineBridge/arm64
-          for f in "$D"/*.asm; do
-            sed -i -E 's/([A-Za-z_][A-Za-z0-9_]*)@PAGEOFF/:lo12:\1/g; s/([A-Za-z_][A-Za-z0-9_]*)@PAGE\b/\1/g' "$f"
-          done
-          grep -n 'adrp\|lo12' "$D"/*.asm || true
-          if grep -rn '@PAGE' "$D"; then
-            echo "Vẫn còn cú pháp Mach-O trong asm" >&2
-            exit 1
-          fi
+          cmake -S . -B build-${{ matrix.name }} -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=${{ steps.ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_PLATFORM=android-${{ env.ANDROID_API }} \
+            -DANDROID_STL=c++_static \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DDOBBY_GENERATE_SHARED=ON \
+            -DDOBBY_DEBUG=OFF \
+            -DPlugin.SymbolResolver=ON \
+            -DPlugin.ImportTableReplace=ON \
+            -DPlugin.Android.BionicLinkerUtil=ON \
+            -DDOBBY_BUILD_EXAMPLE=OFF \
+            -DDOBBY_BUILD_TEST=OFF
 
       - name: Build
-        working-directory: dobby
-        run: |
-          python3 scripts/platform_builder.py \
-            --platform=android \
-            --arch=${{ matrix.abi }} \
-            --cmake_dir=$HOME/opt/cmake-$CMAKE_VERSION \
-            --llvm_dir=$HOME/opt/llvm-$LLVM_VERSION \
-            --android_ndk_dir=$HOME/opt/ndk-$NDK_VERSION
+        run: cmake --build build-${{ matrix.name }} --parallel
 
       - name: Collect output
         run: |
-          mkdir -p out/include out/lib
-          cp dobby/include/dobby.h out/include/
-          cp -r dobby/build/android/${{ matrix.abi }} out/lib/
+          mkdir -p out/${{ matrix.abi }}
+          find build-${{ matrix.name }} \( -name "libdobby.so" -o -name "libdobby.a" \) -exec cp {} out/${{ matrix.abi }}/ \;
+          mkdir -p out/include
+          cp include/dobby.h out/include/ || true
           ls -lR out
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
-          name: dobby-android-${{ matrix.abi }}
-          path: out
-          if-no-files-found: error
+          name: dobby-android-${{ matrix.name }}
+          path: out/
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Zip
+        run: |
+          cd dist
+          for d in dobby-android-*; do zip -r "$d.zip" "$d"; done
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
