@@ -1,0 +1,405 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Chân Trời Sự Kiện</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: một canvas WebGL phủ toàn màn hình. Lúc đầu chỉ là nền trắng tinh; bấm vào thì tờ giấy bị cháy thủng ở góc dưới bên phải, lộ ra hố đen có đĩa bồi tụ, rồi cả tờ giấy bị xoáy vào đó. */
+:root {
+  --paper: #ffffff;
+  --hint: #a9adba;
+  --accent: #ff9a3c;
+  --fg: #ecebe6;
+  --ui: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--fg);
+  font-family: var(--ui);
+  overflow: hidden;
+  padding-block: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; background: var(--paper); }
+#hint {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font: 400 15px/1.4 var(--ui);
+  letter-spacing: 0.04em;
+  color: var(--hint);
+  background: none;
+  border: 0;
+  padding: 16px 24px;
+  cursor: pointer;
+  transition: opacity 0.4s;
+  animation: breathe 2.8s ease-in-out infinite;
+}
+#hint.gone { opacity: 0; pointer-events: none; animation: none; }
+@keyframes breathe { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+#again {
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left, 0px));
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  font: 500 14px/1 var(--ui);
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  background: rgba(10, 8, 6, 0.55);
+  border: 1px solid rgba(255, 154, 60, 0.6);
+  border-radius: 999px;
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+#again:hover { background: rgba(255, 154, 60, 0.25); }
+#hint:focus-visible { outline: 2px solid var(--hint); outline-offset: 2px; border-radius: 8px; }
+#again:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { #hint { animation: none; } }
+</style>
+
+<canvas id="c" aria-label="Tờ giấy trắng bị một hố đen có đĩa bồi tụ ở góc dưới bên phải hút vào" role="img"></canvas>
+<button id="hint" type="button">Bấm vào bất kỳ đâu</button>
+<button id="again" type="button" hidden>Làm lại</button>
+
+<script id="vs" type="x-shader/x-vertex">
+attribute vec2 a;
+void main() { gl_Position = vec4(a, 0.0, 1.0); }
+</script>
+
+<script id="fs" type="x-shader/x-fragment">
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+
+uniform vec2 uB;       // tâm hố đen (pixel của canvas, gốc dưới trái)
+uniform float uR;      // bán kính bóng đen trên màn hình (pixel)
+uniform float uT;      // giây kể từ lúc bấm
+uniform float uRc;     // bán kính vùng giấy đã bị hút (pixel)
+uniform float uTime;   // đồng hồ chạy liên tục cho đĩa quay
+uniform vec2 uShake;   // rung màn hình (pixel)
+uniform float uWhite;  // lớp trắng phủ lên khi làm lại
+
+const float PI = 3.14159265;
+const float CAM_D = 20.0;
+const float CAM_EL = 0.2;
+const float CAM_ROLL = -0.28;
+
+float hash31(vec3 p) {
+  p = fract(p * 0.3183099 + 0.1);
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+float noise3(vec3 x) {
+  vec3 i = floor(x);
+  vec3 f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = mix(mix(hash31(i), hash31(i + vec3(1.0, 0.0, 0.0)), f.x),
+                mix(hash31(i + vec3(0.0, 1.0, 0.0)), hash31(i + vec3(1.0, 1.0, 0.0)), f.x), f.y);
+  float b = mix(mix(hash31(i + vec3(0.0, 0.0, 1.0)), hash31(i + vec3(1.0, 0.0, 1.0)), f.x),
+                mix(hash31(i + vec3(0.0, 1.0, 1.0)), hash31(i + vec3(1.0, 1.0, 1.0)), f.x), f.y);
+  return mix(a, b, f.z);
+}
+
+float fbm3(vec3 p) {
+  float a = 0.5;
+  float s = 0.0;
+  for (int i = 0; i < 4; i++) {
+    s += a * noise3(p);
+    p = p * 2.03 + vec3(1.7, 9.2, 3.1);
+    a *= 0.5;
+  }
+  return s;
+}
+
+vec3 starfield(vec3 d) {
+  vec3 col = vec3(0.010, 0.012, 0.026);
+  float n1 = fbm3(d * 2.2 + 3.0);
+  float n2 = fbm3(d * 3.4 - 5.0);
+  col += vec3(0.11, 0.05, 0.17) * pow(n1, 3.0) * 1.3;
+  col += vec3(0.02, 0.07, 0.13) * pow(n2, 3.0) * 1.2;
+  for (int L = 0; L < 3; L++) {
+    float fl = float(L);
+    vec3 p = d * (38.0 + fl * 47.0);
+    vec3 ip = floor(p);
+    vec3 fp = fract(p) - 0.5;
+    float h = hash31(ip + fl * 13.7);
+    if (h > 0.93) {
+      vec3 off = vec3(hash31(ip + 1.3), hash31(ip + 2.7), hash31(ip + 4.1)) - 0.5;
+      float dist = length(fp - off * 0.7);
+      float b = (1.0 - smoothstep(0.0, 0.13, dist)) * (0.4 + 0.6 * hash31(ip + 9.1));
+      vec3 tint = mix(vec3(0.7, 0.8, 1.0), vec3(1.0, 0.8, 0.6), hash31(ip + 5.5));
+      col += tint * b * (1.7 - fl * 0.35);
+    }
+  }
+  return col;
+}
+
+vec3 heatColor(float t) {
+  vec3 c0 = vec3(0.35, 0.03, 0.0);
+  vec3 c1 = vec3(1.0, 0.32, 0.04);
+  vec3 c2 = vec3(1.0, 0.72, 0.28);
+  vec3 c3 = vec3(1.0, 0.95, 0.82);
+  vec3 c4 = vec3(0.82, 0.9, 1.0);
+  vec3 c = mix(c0, c1, smoothstep(0.0, 0.35, t));
+  c = mix(c, c2, smoothstep(0.3, 0.65, t));
+  c = mix(c, c3, smoothstep(0.6, 0.95, t));
+  c = mix(c, c4, smoothstep(0.95, 1.4, t));
+  return c;
+}
+
+// Đĩa bồi tụ: trả về (màu phát sáng, độ đục)
+vec4 diskAt(vec3 hit, vec3 vel, float t) {
+  float rr = length(hit.xz);
+  float rin = 2.3;
+  float rout = 9.8;
+  if (rr < rin || rr > rout) return vec4(0.0);
+  float phi = atan(hit.z, hit.x);
+  float om = 3.2 / (rr * sqrt(rr));
+  float a = phi - om * t + 0.9 * log(rr);
+  float n1 = fbm3(vec3(rr * 3.0, cos(a) * 2.3, sin(a) * 2.3));
+  float n2 = noise3(vec3(rr * 11.0, cos(a) * 6.0, sin(a) * 6.0) + vec3(0.0, 0.0, t * 0.2));
+  float edgeIn = smoothstep(rin, rin + 0.45, rr);
+  float edgeOut = 1.0 - smoothstep(rout - 3.5, rout, rr);
+  float dens = edgeIn * edgeOut * (0.25 + 1.5 * n1 * (0.55 + 0.7 * n2));
+  float temp = pow(rin / rr, 0.8) * 1.05;
+  vec3 vdir = vec3(-hit.z, 0.0, hit.x) / rr;
+  float beta = min(0.62, 0.72 / sqrt(rr));
+  vec3 nph = -normalize(vel);
+  float dop = sqrt(1.0 - beta * beta) / (1.0 - beta * dot(vdir, nph));
+  float boost = clamp(pow(dop, 3.0), 0.15, 5.0);
+  vec3 col = heatColor(temp * dop) * (0.35 + 1.8 * pow(temp, 1.6)) * boost;
+  float alpha = clamp(dens * 0.85, 0.0, 0.96);
+  return vec4(col, alpha);
+}
+
+vec3 spaceColor(vec2 p, float rpx) {
+  float rr = max(uR, 1.0);
+  float pxToTan = 0.13 / rr;
+  vec3 cam = vec3(0.0, sin(CAM_EL) * CAM_D, -cos(CAM_EL) * CAM_D);
+  vec3 fwd = normalize(-cam);
+  vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd));
+  vec3 up = cross(fwd, right);
+  float cr = cos(CAM_ROLL);
+  float sr = sin(CAM_ROLL);
+  vec3 R2 = right * cr + up * sr;
+  vec3 U2 = up * cr - right * sr;
+  vec3 plane = p.x * R2 + p.y * U2;
+  vec3 rd = normalize(fwd + plane * pxToTan);
+
+  vec3 col = vec3(0.0);
+  if (rpx > 7.5 * rr) {
+    float b = rpx / rr * 2.6;
+    float al = 2.0 / b;
+    vec3 tow = -normalize(plane);
+    col = starfield(normalize(rd + tow * al));
+  } else {
+    vec3 pos = cam;
+    vec3 vel = rd;
+    vec3 hv = cross(pos, vel);
+    float h2 = dot(hv, hv);
+    vec3 acc = vec3(0.0);
+    float trans = 1.0;
+    bool captured = false;
+    for (int i = 0; i < 140; i++) {
+      float r2 = dot(pos, pos);
+      float r = sqrt(r2);
+      if (r < 1.0) { captured = true; break; }
+      if (r > 45.0 && dot(pos, vel) > 0.0) break;
+      float dt = clamp(0.07 * r, 0.03, 0.9);
+      vec3 g = -1.5 * h2 * pos / (r2 * r2 * r);
+      vel = normalize(vel + g * dt);
+      vec3 prev = pos;
+      pos += vel * dt;
+      if (prev.y * pos.y < 0.0) {
+        float f = prev.y / (prev.y - pos.y);
+        vec3 hit = mix(prev, pos, f);
+        vec4 d = diskAt(hit, vel, uTime);
+        acc += trans * d.rgb * d.a;
+        trans *= 1.0 - d.a;
+      }
+    }
+    if (!captured) acc += trans * starfield(normalize(vel));
+    col = acc;
+  }
+  col = 1.0 - exp(-col * 1.25);
+  col = pow(col, vec3(0.95));
+  col += vec3(1.0, 0.5, 0.15) * exp(-rpx / (2.8 * rr)) * 0.2 * smoothstep(0.95 * rr, 1.3 * rr, rpx);
+  return col;
+}
+
+vec3 paperColor(vec2 p, float d, float act) {
+  vec3 c = vec3(1.0);
+  float span = 0.16 * uRc + 45.0;
+  float nr = exp(-d / span) * act;
+  float sw = 2.4 * nr;
+  float cs = cos(sw);
+  float sn = sin(sw);
+  vec2 q = mat2(cs, -sn, sn, cs) * p;
+  q *= 1.0 + 1.4 * nr;
+  float ruled = 1.0 - smoothstep(0.0, 1.7, abs(fract(q.y / 26.0) - 0.5) * 26.0);
+  c -= vec3(0.10, 0.10, 0.07) * ruled * nr * 0.9;
+  float ang = atan(q.y, q.x);
+  float crease = smoothstep(0.55, 1.0, sin(ang * 34.0));
+  c -= vec3(0.07) * crease * nr;
+  c *= 1.0 - 0.30 * exp(-d / (0.05 * uRc + 20.0)) * act;
+  float glow = exp(-d / 18.0) * act;
+  c = mix(c, vec3(1.0, 0.5, 0.12), glow * 0.85);
+  float ember = smoothstep(0.0, 4.0, d) * (1.0 - smoothstep(4.0, 13.0, d)) * act;
+  c += vec3(0.9, 0.45, 0.1) * ember * 0.5;
+  float charr = (1.0 - smoothstep(0.0, 5.0, d)) * act;
+  c = mix(c, vec3(0.05, 0.015, 0.01), charr);
+  return clamp(c, 0.0, 1.0);
+}
+
+void main() {
+  vec2 frag = gl_FragCoord.xy + uShake;
+  vec2 p = frag - uB;
+  float rpx = length(p);
+  float th = atan(p.y, p.x);
+  float act = smoothstep(0.0, 30.0, uRc);
+
+  float wob = uRc * (0.045 * sin(th * 3.0 + 1.3 + uT * 0.4) + 0.03 * sin(th * 7.0 - uT * 0.9));
+  wob += uRc * 0.16 * (noise3(vec3(cos(th) * 2.0, sin(th) * 2.0, uT * 0.35)) - 0.5);
+  wob += uRc * 0.025 * sin(th * 6.0 - uRc * 0.02);
+  float d = rpx - (uRc + wob * act);
+
+  vec3 col;
+  if (d > 1.5) {
+    col = paperColor(p, d, act);
+  } else if (d < -1.5) {
+    col = spaceColor(p, rpx);
+  } else {
+    col = mix(spaceColor(p, rpx), paperColor(p, max(d, 0.0), act), smoothstep(-1.5, 1.5, d));
+  }
+  col = mix(col, vec3(1.0), uWhite);
+  gl_FragColor = vec4(col, 1.0);
+}
+</script>
+
+<script>
+(function () {
+  var cv = document.getElementById('c');
+  var hint = document.getElementById('hint');
+  var again = document.getElementById('again');
+  var reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var gl = cv.getContext('webgl', { alpha: false, antialias: false }) || cv.getContext('experimental-webgl');
+  if (!gl) { hint.textContent = 'Trình duyệt này không hỗ trợ WebGL'; return; }
+
+  function compile(type, src) {
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      console.error(gl.getShaderInfoLog(s));
+      return null;
+    }
+    return s;
+  }
+  var vs = compile(gl.VERTEX_SHADER, document.getElementById('vs').textContent);
+  var fs = compile(gl.FRAGMENT_SHADER, document.getElementById('fs').textContent);
+  if (!vs || !fs) { hint.textContent = 'Không khởi tạo được hiệu ứng'; return; }
+  var prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(prog)); hint.textContent = 'Không khởi tạo được hiệu ứng'; return; }
+  gl.useProgram(prog);
+  var buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  var loc = gl.getAttribLocation(prog, 'a');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  var U = {};
+  ['uB', 'uR', 'uT', 'uRc', 'uTime', 'uShake', 'uWhite'].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
+
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
+  var W, H, scale, Rb, Bx, By, maxR;
+  var state = 'idle', t0 = 0, tr0 = 0, dirty = true;
+  var DONE_AT = 7.0;
+
+  function layout() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    scale = Math.min(window.devicePixelRatio || 1, 1.25);
+    scale = Math.min(scale, Math.sqrt(1.8e6 / (W * H)));
+    cv.width = Math.max(2, Math.floor(W * scale));
+    cv.height = Math.max(2, Math.floor(H * scale));
+    gl.viewport(0, 0, cv.width, cv.height);
+    var Rcss = clamp(Math.min(W, H) * 0.12, 36, 130);
+    Rb = Rcss * scale;
+    Bx = (W - Rcss * 3.7) * scale;
+    By = Rcss * 2.6 * scale;
+    maxR = Math.hypot(W, H) * scale * 1.25;
+    dirty = true;
+  }
+
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (state === 'idle' && !dirty) return;
+    var T = 0, hs = 0, Rc = 0, white = 0, shx = 0, shy = 0;
+    if (state === 'running') {
+      T = (now - t0) / 1000;
+      hs = easeOut(clamp((T - 0.1) / 1.5, 0, 1));
+      var openR = Rb * 4.4 * easeOut(clamp(T / 1.5, 0, 1));
+      var sweep = (maxR - openR) * Math.pow(clamp((T - 1.3) / 5.2, 0, 1), 1.7);
+      Rc = openR + sweep;
+      if (!reduced && T > 0.2 && T < 4.2) {
+        var amp = 7 * scale * Math.sin(Math.PI * clamp((T - 0.2) / 4.0, 0, 1));
+        shx = (Math.random() - 0.5) * amp;
+        shy = (Math.random() - 0.5) * amp;
+      }
+      if (T >= DONE_AT) { state = 'done'; again.hidden = false; }
+    }
+    if (state === 'done') { T = 99; hs = 1; Rc = maxR * 1.4; }
+    if (state === 'reset') {
+      var k = clamp((now - tr0) / 900, 0, 1);
+      T = 99; hs = 1 - easeOut(k); Rc = maxR * 1.4; white = k;
+      if (k >= 1) { state = 'idle'; hint.classList.remove('gone'); dirty = true; return; }
+    }
+    gl.uniform2f(U.uB, Bx, By);
+    gl.uniform1f(U.uR, Math.max(Rb * hs, 1.0));
+    gl.uniform1f(U.uT, T);
+    gl.uniform1f(U.uRc, Rc);
+    gl.uniform1f(U.uTime, now / 1000 * (reduced ? 0.25 : 1));
+    gl.uniform2f(U.uShake, shx, shy);
+    gl.uniform1f(U.uWhite, white);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (state === 'idle') dirty = false;
+  }
+
+  function start() {
+    if (state !== 'idle') return;
+    state = 'running';
+    t0 = performance.now();
+    hint.classList.add('gone');
+  }
+  function restart() {
+    if (state !== 'done') return;
+    state = 'reset';
+    tr0 = performance.now();
+    again.hidden = true;
+  }
+
+  cv.addEventListener('click', start);
+  hint.addEventListener('click', start);
+  again.addEventListener('click', restart);
+  window.addEventListener('resize', layout);
+
+  layout();
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>
