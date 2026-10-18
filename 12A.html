@@ -411,7 +411,8 @@ html.gate *, html.gate *::before, html.gate *::after { animation-play-state: pau
   var cnt = document.getElementById('memberCount'); if (cnt) cnt.textContent = M.length;
   var PHOTOS = {
     'Nguyễn Đức Anh': 'https://raw.githubusercontent.com/dux-create/Hi/main/anh1.jpeg',
-    'Phan Trung Nghĩa': 'https://raw.githubusercontent.com/dux-create/Hi/main/anh2.jpeg'
+    'Phan Trung Nghĩa': 'https://raw.githubusercontent.com/dux-create/Hi/main/anh2.jpeg',
+    'Trần Trung Hiếu': 'https://raw.githubusercontent.com/dux-create/Hi/refs/heads/main/anh3.jpeg'
   };
   Object.keys(PHOTOS).forEach(function (n) { var im = new Image(); im.src = PHOTOS[n]; }); /* tải trước để không bị chớp khi tour tới */
   var C = ['a', 'b', 'c', 'd'], grid = document.getElementById('grid'), jump = document.getElementById('jump');
@@ -470,6 +471,12 @@ html.gate *, html.gate *::before, html.gate *::after { animation-play-state: pau
   var SIZE = 16, FRAME = 1000 / 60 - 2;
   var w = 0, h = 0, rows = 0, cols = [], last = 0, running = true, stopped = false;
   window.stopMatrix = function () { stopped = true; running = false; };
+  window.startMatrix = function () {            /* chạy lại Matrix (terminal cuối sau hố đen) */
+    if (!stopped) return;
+    stopped = false; running = !document.hidden; last = 0;
+    resize();                                    /* dựng lại cột + xoá khung hình cũ đang đứng yên */
+    if (running) requestAnimationFrame(frame);
+  };
   var root = document.documentElement, cMain = '#00FF41', cHead = '#E8FFEE', fontFam = 'monospace';
   function rnd(n) { return (Math.random() * n) | 0; }
   function hex(n) { var s = ''; while (n--) s += '0123456789abcdef'.charAt(rnd(16)); return s; }
@@ -856,6 +863,7 @@ window.TERM_PAGES = [
   window.termMpv = async function () {
     if (window._mpv) return; window._mpv = 1;
     document.documentElement.classList.remove('burning');
+    if (window.startMatrix) window.startMatrix();
     body = body || document.getElementById('termBody'); stat = stat || document.getElementById('termStat');
     nextBox = nextBox || document.getElementById('termNext');
     waiting = false; busy = true; if (nextBox) nextBox.hidden = true;
@@ -1768,6 +1776,7 @@ void main(){
   }
   function reopenTerminal() {
     root.classList.remove('burning');
+    if (window.startMatrix) window.startMatrix();
     try { vid.pause(); } catch (e) {}
     wrap.classList.remove('on', 'show');
   }
