@@ -17,13 +17,12 @@ permissions:
 env:
   ANDROID_API: 21
   NDK_VERSION: r25b
-  TIMEOUT_MINUTES: 60
 
 jobs:
   build:
     name: Build (${{ matrix.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ env.TIMEOUT_MINUTES }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
