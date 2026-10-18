@@ -1,4 +1,4 @@
-name: Build Dobby Android
+name: Build Dobby for Android
 
 on:
   workflow_dispatch:
@@ -7,15 +7,23 @@ on:
         description: "Dobby branch/tag/commit"
         default: "master"
   push:
+    branches: [main, master]
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
 env:
   ANDROID_API: 21
+  NDK_VERSION: r25b
+  TIMEOUT_MINUTES: 60
 
 jobs:
   build:
+    name: Build (${{ matrix.name }})
     runs-on: ubuntu-latest
+    timeout-minutes: ${{ env.TIMEOUT_MINUTES }}
     strategy:
       fail-fast: false
       matrix:
@@ -27,32 +35,58 @@ jobs:
 
     steps:
       - name: Checkout Dobby
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: jmpews/Dobby
           ref: ${{ github.event.inputs.dobby_ref || 'master' }}
           submodules: recursive
+          path: dobby
 
       - name: Setup NDK
         id: ndk
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r26d
-          add-to-path: false
+          ndk-version: ${{ env.NDK_VERSION }}
+          add-to-path: true
 
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y ninja-build cmake
-
-      - name: Patch arm64 asm (Mach-O @PAGE syntax -> ELF GOT syntax)
         run: |
-          f=source/TrampolineBridge/ClosureTrampolineBridge/arm64/closure_bridge_arm64.asm
-          sed -E -i \
-            -e 's|adrp[[:space:]]+x17,[[:space:]]*common_closure_bridge_handler@PAGE$|adrp x17, :got:common_closure_bridge_handler|' \
-            -e 's|add[[:space:]]+x17,[[:space:]]*x17,[[:space:]]*common_closure_bridge_handler@PAGEOFF$|ldr x17, [x17, :got_lo12:common_closure_bridge_handler]|' \
-            "$f"
-          grep -n "common_closure_bridge_handler" "$f"
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake python3 python3-pip
 
-      - name: Configure
+      - name: Ensure ccache (optional, speeds repeated builds)
+        run: |
+          sudo apt-get install -y ccache
+          ccache --version || true
+
+      - name: Patch arm64 asm (Mach-O @PAGE -> ELF GOT)
+        working-directory: dobby
+        run: |
+          # Prefer targeted change for known file, fallback to directory-wide fixes.
+          f=source/TrampolineBridge/ClosureTrampolineBridge/arm64/closure_bridge_arm64.asm
+          if [ -f "$f" ]; then
+            sed -E -i \
+              -e 's|adrp[[:space:]]+x17,[[:space:]]*common_closure_bridge_handler@PAGE$|adrp x17, :got:common_closure_bridge_handler|' \
+              -e 's|add[[:space:]]+x17,[[:space:]]*x17,[[:space:]]*common_closure_bridge_handler@PAGEOFF$|ldr x17, [x17, :got_lo12:common_closure_bridge_handler]|' \
+              "$f"
+            grep -n "common_closure_bridge_handler" "$f" || true
+          else
+            D=source/TrampolineBridge/ClosureTrampolineBridge/arm64
+            if [ -d "$D" ]; then
+              for asm in "$D"/*.asm; do
+                [ -f "$asm" ] || continue
+                sed -i -E 's/([A-Za-z_][A-Za-z0-9_]*)@PAGEOFF/:lo12:\1/g; s/([A-Za-z_][A-Za-z0-9_]*)@PAGE\b/\1/g' "$asm" || true
+              done
+              grep -n 'adrp\|lo12' "$D"/*.asm || true
+              if grep -rn '@PAGE' "$D"; then
+                echo "Found remaining @PAGE occurrences in asm" >&2
+                exit 1
+              fi
+            fi
+          fi
+
+      - name: Configure (CMake)
+        working-directory: dobby
         run: |
           cmake -S . -B build-${{ matrix.name }} -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE=${{ steps.ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
@@ -68,22 +102,26 @@ jobs:
             -DDOBBY_BUILD_EXAMPLE=OFF \
             -DDOBBY_BUILD_TEST=OFF
 
-      - name: Build
+      - name: Build (CMake)
+        working-directory: dobby
         run: cmake --build build-${{ matrix.name }} --parallel
 
-      - name: Collect output
+      - name: Collect outputs
+        working-directory: dobby
         run: |
-          mkdir -p out/${{ matrix.abi }}
-          find build-${{ matrix.name }} \( -name "libdobby.so" -o -name "libdobby.a" \) -exec cp {} out/${{ matrix.abi }}/ \;
-          mkdir -p out/include
-          cp include/dobby.h out/include/ || true
-          ls -lR out
+          outdir=out/${{ matrix.abi }}
+          mkdir -p "$outdir" out/include
+          # copy libdobby.* if found
+          find build-${{ matrix.name }} \( -name "libdobby.so" -o -name "libdobby.a" \) -exec cp -v {} "$outdir"/ \; || true
+          cp -v include/dobby.h out/include/ || true
+          ls -lR out || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: dobby-android-${{ matrix.name }}
           path: out/
+          if-no-files-found: error
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
@@ -92,16 +130,20 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
         with:
           path: dist
 
-      - name: Zip
+      - name: Zip artifacts
         run: |
           cd dist
-          for d in dobby-android-*; do zip -r "$d.zip" "$d"; done
+          for d in dobby-android-*; do
+            [ -d "$d" ] || continue
+            zip -r "${d}.zip" "$d"
+          done
 
-      - name: Release
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.zip
