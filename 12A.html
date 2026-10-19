@@ -12,11 +12,13 @@ html.auth-locked *, html.auth-locked *::before, html.auth-locked *::after { anim
 (function () {
   var de = document.documentElement;
   de.classList.add('auth-locked');
-  var a = new Audio(); a.preload = 'auto'; a.src = 'https://raw.githubusercontent.com/dux-create/Hi/main/1.mp3'; window._bgm = a;
+  var a = new Audio(); a.preload = 'auto'; a.src = 'https://raw.githubusercontent.com/dux-create/Hi/main/1.mp3'; a.volume = 1; window._bgm = a;
+  /* Bắt đầu tải nhạc sớm; play() vẫn cần được trình duyệt cho phép. */
+  try { a.load(); } catch (e) {}
   var started = false, queue = [];
   window.onPageStart = function (fn) { if (started) fn(); else queue.push(fn); };
   window.startBackgroundMusic = function () {
-    try { var p = a.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    try { if (a.ended) a.currentTime = 0; var p = a.play(); if (p && p.catch) p.catch(function (err) { try { console.warn('Nhạc chưa phát được:', err); } catch (e) {} }); } catch (e) {}
   };
   window.completeLogin = function () {
     if (started) return; started = true;
@@ -172,7 +174,7 @@ html.auth-locked *, html.auth-locked *::before, html.auth-locked *::after { anim
   .card { animation: slide-l 0.95s cubic-bezier(.2,.8,.2,1) backwards; animation-delay: calc(var(--intro) + 300ms + min(var(--i, 0), 3) * 120ms); }
   .card:nth-child(even) { animation-name: slide-r; }
   .tags li { animation: tag 0.6s ease both; animation-delay: calc(var(--intro) + 700ms + min(var(--i, 0), 3) * 120ms + var(--j, 0) * 70ms); }
-  /* Đợi 1,5s rồi máy bay mới đẩy đi (trước là 0,5s) */
+  /* Máy bay bắt đầu ngay, không chờ delay */
   :root { --intro: 2.1s; }
   @keyframes sweep {
     0% { transform: translateX(0); visibility: visible; }
@@ -185,7 +187,7 @@ html.auth-locked *, html.auth-locked *::before, html.auth-locked *::after { anim
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
     background: var(--ink); color: var(--bg); visibility: hidden;
     border-left: 3px solid var(--accent);
-    animation: sweep 2.4s cubic-bezier(.62, 0, .28, 1) 1.5s both;
+    animation: sweep 2.4s cubic-bezier(.62, 0, .28, 1) 0s both;
   }
   .intro-name {
     font-family: var(--font-display); font-weight: 800; line-height: 1.05; text-align: center;
@@ -739,8 +741,7 @@ h1{margin:0;text-align:center;font-family:&quot;Chakra Petch&quot;,&quot;Segoe U
     ['', [], 'Phan Lê Trung Hiếu'],
     ['', [], 'Phùng Văn Hà'],
     ['', [], 'Nguyễn Huy Sang'],
-    ['', [], 'Nguyên Bá Dương'],
-    ['', [], 'Đỗ Trọng Phú']
+    ['', [], 'Nguyên Bá Dương']
   ];
   window.TEAM_NAMES = M.map(function (m) { return m[2]; });
   var cnt = document.getElementById('memberCount'); if (cnt) cnt.textContent = M.length;
@@ -750,7 +751,6 @@ h1{margin:0;text-align:center;font-family:&quot;Chakra Petch&quot;,&quot;Segoe U
     'Trần Trung Hiếu': 'https://raw.githubusercontent.com/dux-create/Hi/refs/heads/main/anh3.jpeg',
     'Phạm Công Hoàng': 'https://raw.githubusercontent.com/dux-create/Hi/refs/heads/main/anh4.jpeg',
     'Phùng Văn Hà': 'https://raw.githubusercontent.com/dux-create/Hi/refs/heads/main/anh5.jpeg',
-    'Đỗ Trọng Phú': 'https://raw.githubusercontent.com/dux-create/Hi/refs/heads/main/anh6.jpeg'
   };
   Object.keys(PHOTOS).forEach(function (n) { var im = new Image(); im.src = PHOTOS[n]; }); /* tải trước để không bị chớp khi tour tới */
   var C = ['a', 'b', 'c', 'd'], grid = document.getElementById('grid'), jump = document.getElementById('jump');
@@ -2198,14 +2198,34 @@ void main(){
 </script>
 
 <script>
-/* Chỉ phát nhạc khi màn “Chào mừng” có máy bay bắt đầu xuất hiện. */
+/* Phát nhạc đúng lúc màn chào mừng bắt đầu; có fallback nếu animationstart bị bỏ lỡ. */
 (function () {
   var intro = document.getElementById('welcomeIntro');
   if (!intro) return;
-  intro.addEventListener('animationstart', function (event) {
-    if (event.animationName !== 'sweep') return;
+  var fired = false;
+  function playAtIntro() {
+    if (fired) return;
+    fired = true;
+    var audio = window._bgm;
+    if (!audio) return;
+    try { audio.currentTime = 0; audio.volume = 1; } catch (e) {}
     if (typeof window.startBackgroundMusic === 'function') window.startBackgroundMusic();
-  }, { once: true });
+  }
+  intro.addEventListener('animationstart', function (event) {
+    if (event.animationName === 'sweep') playAtIntro();
+  });
+  /* Nếu o trình duyệt không phát animationstart khi bỏ trạng thái khóa, vẫn kích hoạt sát thời điểm intro hiện ra. */
+  var observer;
+  if (window.MutationObserver) {
+    observer = new MutationObserver(function () {
+      if (!document.documentElement.classList.contains('auth-locked')) {
+        requestAnimationFrame(function () {
+          if (getComputedStyle(intro).visibility !== 'hidden') playAtIntro();
+        });
+      }
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  }
 })();
 </script>
 </body>
